@@ -1,9 +1,20 @@
 const asyncHandler = require("express-async-handler");
 const userModel = require("../schemas/userSchema");
 const Review = require("../schemas/reviewSchema");
+const Request = require("../schemas/requestSchema");
 const bcrypt = require("bcrypt");
 const {generateToken, verifyToken} = require("../middlewares/jwt");
 const _ = require("lodash");
+const cloudinary = require('cloudinary').v2;
+
+
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: 'dmv6xucum',
+  api_key: process.env.api_key,
+  api_secret: process.env.api_secret
+});
 
 
 exports.signUp=asyncHandler(async(req,res)=>{
@@ -29,7 +40,7 @@ exports.signUp=asyncHandler(async(req,res)=>{
     const token =await generateToken({userId:user._id,email:user.email})
     res.status(200).json({
         message:"User created",
-        data: _.omit(user, password),
+        data: _.omit(user._doc, password),
         token,
         status: true
     })
@@ -63,9 +74,10 @@ exports.login = asyncHandler(async (req, res) => {
       };
       const token = await generateToken(tokenObj);
       // User get
+      let {password,...others}=user._doc
       res.status(200).json({
         message: "User logged in succesfully !!..",
-        data: _.omit(user, password),
+        data: others,
         token,
         status: true,
       });
@@ -75,15 +87,18 @@ exports.login = asyncHandler(async (req, res) => {
 
 
 exports.getUser = asyncHandler(async (req, res) => {
-    const user = await userModel.findOne({_id:req.userId});
+    const id= req.params.id
+    let user = await userModel.findOne({_id:id});
    // const user = await userModel.find();
    if (!user) {
      res.status(404)
      throw new Error( "User not found") ;
    }
+   user = user._doc
    let avgRating=0.0;
-   if(user.role == "mechanic"){
+   if(user.role == "Mechanic"){
     const requests = await Request.find({mechanic:user._id})
+    console.log(requests)
     if(requests){
         ratings=0
         requests.map(async(ele)=>{
@@ -94,9 +109,10 @@ exports.getUser = asyncHandler(async (req, res) => {
        
     }
    }
+   let {password,...others}=user
    res.status(200).json({
      message: "User retrieved succesfully !!..",
-     data: {..._.omit(user, password),avgRating},
+     data: {others,avgRating},
      status: true,
    });
 })
@@ -105,13 +121,25 @@ exports.updateUser = asyncHandler(async (req, res) => {
    
    const { username, latitude, longitude,services,role,phoneNum,appointment_date_time } = req.body;
    // If fields are missing
-   if (!username) {
-     res.status(400)
-     throw new Error( "Required fields are missing") ;
+  //  if (!username) {
+  //    res.status(400)
+  //    throw new Error( "Required fields are missing");
+  //  }
+  const imageData = req.body.image;
+
+  // Upload image to Cloudinary
+  const img = await cloudinary.uploader.upload(imageData, {
+    resource_type: 'image'
+  });  
+   if(!img){
+
+       res.status(400)
+       throw new Error( "Image not uploaded")
    }
+  
 
    //update User
-   const user = await userModel.findByIdAndUpdate(req.userId,{username, latitude, longitude,services,role,phoneNum,appointment_date_time},{new:true});
+   const user = await userModel.findByIdAndUpdate(req.userId,{username, latitude, longitude,services,role,phoneNum,appointment_date_time,image:img.secure_url},{new:true});
    if (!user) {
      res.status(400)
      throw new Error( "User not found") ;
@@ -141,7 +169,7 @@ exports.updatePassword=asyncHandler(async(req,res)=>{
     const token=await generateToken({userId:user.id,email:user.email})
     res.status(200).json({
         message: "Password updated succesfully !!..",
-        data: _.omit(user, password),
+        data: _.omit(user._doc, password),
         status: true,
         token
     })
@@ -161,7 +189,7 @@ exports.deleteUser = asyncHandler(async (req, res) => {
       res.status(400)
       throw new Error( "User not found") ;
     }
-    if(user.role == "mechanic"){
+    if(user.role == "Mechanic"){
         const requests= Request.find({mechanic:user._id})
         requests.map(async(ele,ind)=>{
             const rev=await Review.deleteMany({_id:ele.review})

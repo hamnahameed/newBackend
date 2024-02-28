@@ -4,17 +4,17 @@ const asyncHandler = require('express-async-handler')
 exports.getMechanics=asyncHandler(async(req,res)=>{
     let {longitude,latitude,services}=req.body
     let mechanics=""
-    if (services){
+    if (services && services.length > 0) {
         let ids=services.map((s,i)=>s.id)
         mechanics = await userModel.find({
-            role: "mechanic",
+            role: "Mechanic",
             "services.id": { $in: ids },
             longitude: { $exists: true, $ne: null }, // Check if longitude exists and is not null
             latitude: { $exists: true, $ne: null }   // Check if latitude exists and is not null
         });
     }
     else{
-         mechanics=await userModel.find({ role: "mechanic"   ,
+         mechanics=await userModel.find({ role: "Mechanic"   ,
          longitude: { $exists: true, $ne: null }, 
          latitude: { $exists: true, $ne: null } })
     }

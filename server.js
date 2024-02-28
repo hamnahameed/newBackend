@@ -10,12 +10,13 @@ app.use(cors())
 
 app.use(express.json())
 
+connectDb();
+
 app.use('/api/users',require('./routes/userRoutes'))
-app.use('/api/mechanics',require('./routes/mechanicROutes'))
+app.use('/api/mechanics',require('./routes/mechanicRoutes'))
 app.use('/api/requests',require('./routes/requestRoutes'))
 app.use('/api/appDetails',require('./routes/appDetailRoutes'))
 
-connectDb();
 
 app.use(errorHandler);
 app.listen(PORT,()=>{

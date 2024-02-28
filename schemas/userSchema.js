@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        default: "user",
+        default: "Requestor",
         required: true
     },
     latitude:{
@@ -31,6 +31,9 @@ const userSchema = new mongoose.Schema({
     },
     phoneNum:{
         type: String,
+    },
+    image:{
+        type:String
     }
 },{
     timestamps:true
