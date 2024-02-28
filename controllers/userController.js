@@ -37,7 +37,7 @@ exports.signUp=asyncHandler(async(req,res)=>{
         role,
         phoneNum
     })
-    const token =await generateToken({userId:user._id,email:user.email})
+    const token =await generateToken({userId:user._id,email:user.email,role:user.role})
     res.status(200).json({
         message:"User created",
         data: _.omit(user._doc, password),
@@ -71,6 +71,8 @@ exports.login = asyncHandler(async (req, res) => {
     if (verifyHash) {
       const tokenObj = {
         userId:user._id,
+        email:user.email,
+        role:user.role
       };
       const token = await generateToken(tokenObj);
       // User get
@@ -84,8 +86,6 @@ exports.login = asyncHandler(async (req, res) => {
     }
 })
 
-
-
 exports.getUser = asyncHandler(async (req, res) => {
     const id= req.params.id
     let user = await userModel.findOne({_id:id});
@@ -96,23 +96,30 @@ exports.getUser = asyncHandler(async (req, res) => {
    }
    user = user._doc
    let avgRating=0.0;
+   let requests =[]
+   let review=[]
    if(user.role == "Mechanic"){
-    const requests = await Request.find({mechanic:user._id})
+    requests = await Request.find({mechanic:user._id})
     console.log(requests)
     if(requests){
-        ratings=0
-        requests.map(async(ele)=>{
-            const review = await Review.find({ _id: ele.review });
-            ratings +=review.rating
-        })
-        avgRating = ratings/requests.length
+      let ratings = 0;
+      let counter=0
+      await Promise.all(requests.map(async (ele) => {
+        if (ele && ele.review) {
+              review = await Review.find({ _id: ele.review });
+              ratings += review[0].rating;
+              counter+=1
+          }
+      }));
+        avgRating = ratings/counter
+        avgRating = avgRating.toFixed(2)
        
     }
    }
    let {password,...others}=user
    res.status(200).json({
      message: "User retrieved succesfully !!..",
-     data: {others,avgRating},
+     data: {others,avgRating,requests,review},
      status: true,
    });
 })
@@ -175,20 +182,71 @@ exports.updatePassword=asyncHandler(async(req,res)=>{
     })
 })
 
+exports.changePassword=asyncHandler(async(req,res)=>{
+  const {previousPassword, newPassword} = req.body
+
+   // If fields are missing
+   if (!req.userId || !previousPassword || !newPassword) {
+    res.status(400)
+    throw new Error("Required fields are missing");
+  }
+
+  // Find the user by ID
+  const User = await userModel.findById(req.userId);
+
+  // If user not found
+  if (!User) {
+    res.status(400)
+    throw new Error("User not found");
+  }
+
+  // Check if the provided password matches the stored hashed password
+  const isPasswordMatch = await bcrypt.compare(previousPassword, User.password);
+
+  if (!isPasswordMatch) {
+    res.status(400)
+    throw new Error("Incorrect password");
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword,10)
+  const user = await userModel.findByIdAndUpdate(req.userId,{password:hashedPassword},{new:true})
+  
+   res.status(200).json({
+      message: "Password updated succesfully !!..",
+      // data: _.omit(user._doc, password),
+      status: true,
+      
+  })
+})
+
 exports.deleteUser = asyncHandler(async (req, res) => {
-   
-    // If fields are missing
-    if (!req.userId) {
-      res.status(400)
-      throw new Error( "Required fields are missing") ;
-    }
- 
+  const { password } = req.body;
+
+  // If fields are missing
+  if (!req.userId || !password) {
+    res.status(400)
+    throw new Error("Required fields are missing");
+  }
+
+  // Find the user by ID
+  const User = await userModel.findById(req.userId);
+
+  // If user not found
+  if (!User) {
+    res.status(400)
+    throw new Error("User not found");
+  }
+
+  // Check if the provided password matches the stored hashed password
+  const isPasswordMatch = await bcrypt.compare(password, User.password);
+
+  if (!isPasswordMatch) {
+    res.status(400)
+    throw new Error("Incorrect password");
+  }
+
     //delete User
     const user = await userModel.findByIdAndDelete(req.userId);
-    if (!user) {
-      res.status(400)
-      throw new Error( "User not found") ;
-    }
     if(user.role == "Mechanic"){
         const requests= Request.find({mechanic:user._id})
         requests.map(async(ele,ind)=>{
@@ -198,7 +256,7 @@ exports.deleteUser = asyncHandler(async (req, res) => {
     }
     res.status(200).json({
       message: "User deleted succesfully !!..",
-      data: _.omit(user, password),
+      // data: _.omit(user, password),
       status: true,
     });
  
